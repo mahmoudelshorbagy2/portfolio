@@ -59,8 +59,8 @@
       drawTotal: 8000,      // one full two-line pass — slow, deliberate strokes
       overlap: 0.15,        // next letter starts at 85% of previous
       minLetterDur: 300,
-      particleMax: mobile ? 12 : 36,
-      particleEvery: mobile ? 60 : 26,
+      particleMax: mobile ? 10 : 26,
+      particleEvery: mobile ? 70 : 32,
       sparkleLife: 650
     };
 
@@ -88,8 +88,9 @@
         id: gradId, gradientUnits: 'userSpaceOnUse',
         x1: 0, y1: data.gradY[0], x2: 0, y2: data.gradY[1]
       });
-      grad.appendChild(el('stop', { offset: '0', 'stop-color': '#8B5CFF' }));
-      grad.appendChild(el('stop', { offset: '1', 'stop-color': '#FF3DAE' }));
+      // Matches the WATCH MY WORK button gradient, top -> bottom.
+      grad.appendChild(el('stop', { offset: '0', 'stop-color': '#7B2FFE' }));
+      grad.appendChild(el('stop', { offset: '1', 'stop-color': '#FF2E9A' }));
       defs.appendChild(grad);
 
       const halo = el('radialGradient', { id: haloId });
@@ -111,12 +112,23 @@
             id: maskId, maskUnits: 'userSpaceOnUse',
             x: -10000, y: -10000, width: 20000, height: 20000
           });
-          const brush = el('path', {
-            d: L.d, fill: 'none', stroke: '#fff',
-            'stroke-width': opts.brushWidth,
+          const brushLayer = (widthFactor, color) => el('path', {
+            d: L.d, fill: 'none', stroke: color,
+            'stroke-width': (opts.brushWidth * widthFactor).toFixed(1),
             'stroke-linecap': 'round', 'stroke-linejoin': 'round'
           });
-          mask.appendChild(brush);
+          // Ink-brush mask: a soft half-tone fringe runs just ahead of the
+          // solid body, and a thin tip leads them both — the stroke tapers
+          // thin at the tip and thickens behind it, edges settling like ink.
+          const layers = opts.inkBrush
+            ? [
+                { widthFactor: 1.28, lead: 0.035, elRef: brushLayer(1.28, '#7d7d7d') },
+                { widthFactor: 1, lead: 0, elRef: brushLayer(1, '#fff') },
+                { widthFactor: 0.4, lead: 0.06, elRef: brushLayer(0.4, '#fff') }
+              ]
+            : [{ widthFactor: 1, lead: 0, elRef: brushLayer(1, '#fff') }];
+          layers.forEach((ly) => mask.appendChild(ly.elRef));
+          const brush = layers[1] ? layers[1].elRef : layers[0].elRef; // solid body drives measurement
           defs.appendChild(mask);
 
           const p = el('path', {
@@ -125,7 +137,7 @@
           });
           g.appendChild(p);
           letters.push({
-            brush, fill: p, maskRef: 'url(#' + maskId + ')',
+            brush, layers, fill: p, maskRef: 'url(#' + maskId + ')',
             tx: line.tx, ty: line.ty,
             lineStart: li > 0 && i === 0,
             len: 0, start: 0, dur: 0, done: false, endPt: null
@@ -151,8 +163,10 @@
         l.len = l.brush.getTotalLength();
         const pt = l.brush.getPointAtLength(l.len);
         l.endPt = { x: pt.x + l.tx, y: pt.y + l.ty };
-        l.brush.setAttribute('stroke-dasharray', l.len);
-        l.brush.setAttribute('stroke-dashoffset', l.len);
+        l.layers.forEach((ly) => {
+          ly.elRef.setAttribute('stroke-dasharray', l.len);
+          ly.elRef.setAttribute('stroke-dashoffset', l.len);
+        });
       });
       computeTimeline();
       svg.style.visibility = '';
@@ -272,7 +286,7 @@
     /* ---------- the seamless loop ---------- */
     function finishLetter(l) {
       l.done = true;
-      l.brush.setAttribute('stroke-dashoffset', 0);
+      l.layers.forEach((ly) => ly.elRef.setAttribute('stroke-dashoffset', 0));
       // Drop the mask: guarantees every last pixel (like dotting the
       // letter after the stroke) and lightens rendering afterwards.
       l.fill.removeAttribute('mask');
@@ -285,7 +299,7 @@
       letters.forEach((l) => {
         l.done = false;
         l.fill.setAttribute('mask', l.maskRef);
-        l.brush.setAttribute('stroke-dashoffset', l.len);
+        l.layers.forEach((ly) => ly.elRef.setAttribute('stroke-dashoffset', l.len));
       });
     }
 
@@ -299,8 +313,14 @@
           finishLetter(l);
         } else {
           const e = easeInOutQuad(p);
-          l.brush.setAttribute('stroke-dashoffset', (l.len * (1 - e)).toFixed(1));
-          const pt = l.brush.getPointAtLength(l.len * e);
+          let tipE = e;
+          l.layers.forEach((ly) => {
+            const le = Math.min(1, e + ly.lead);
+            ly.elRef.setAttribute('stroke-dashoffset', (l.len * (1 - le)).toFixed(1));
+            if (le > tipE) tipE = le;
+          });
+          // The comet rides the thin leading tip of the brush.
+          const pt = l.brush.getPointAtLength(l.len * tipE);
           tip = { x: pt.x + l.tx, y: pt.y + l.ty };
         }
       }
@@ -363,9 +383,10 @@
   const engines = {
     // Norican script: moderate stems -> brush ~22 units at 100px em.
     en: window.HERO_NAME_PATHS ? createEngine(window.HERO_NAME_PATHS, { id: 'en', brushWidth: 22 }) : null,
-    // Alexandria 800 has heavy stems -> wider brush. "محمود" finishes
-    // completely before "الشوربجي" begins.
-    ar: window.HERO_NAME_PATHS_AR ? createEngine(window.HERO_NAME_PATHS_AR, { id: 'ar', brushWidth: 40, lineGap: true }) : null
+    // Alexandria 800 has heavy stems -> wider brush. Ink-brush layering
+    // (tapered tip + soft half-tone fringe) for a real brush feel.
+    // "محمود" finishes completely before "الشوربجي" begins.
+    ar: window.HERO_NAME_PATHS_AR ? createEngine(window.HERO_NAME_PATHS_AR, { id: 'ar', brushWidth: 40, lineGap: true, inkBrush: true }) : null
   };
 
   function applyLang() {

@@ -166,6 +166,15 @@ html[lang="ar"] .section-title { font-family: var(--font-arabic); font-weight: 7
   50% { background-position: 100% 50%; }
 }
 
+/* background-position repaints every frame — not worth it on phones */
+@media (max-width: 768px) {
+  .text-gradient, .eyebrow span[data-i18n] { animation: none; }
+}
+
+/* Marquees pause while their section is offscreen (set by JS) */
+.marquee-track.fx-paused,
+.work-marquee-track.fx-paused { animation-play-state: paused; }
+
 /* ==========================================================================
    Buttons
    ========================================================================== */
@@ -433,6 +442,7 @@ html[lang="ar"] .nav-links a { font-family: var(--font-arabic); font-weight: 500
 .hero-content > * { pointer-events: auto; }
 
 .hero-name {
+  position: relative;
   width: 100%;
   min-height: clamp(140px, 26vw, 300px);
   display: flex;
@@ -442,28 +452,31 @@ html[lang="ar"] .nav-links a { font-family: var(--font-arabic); font-weight: 500
   gap: 2px;
 }
 
-/* Both names render as SVG drawings: Tilt Prism paths for English,
-   Alexandria + kashida paths for Arabic. JS toggles which one shows. */
+/* Static ambient glow behind the name — replaces per-frame drop-shadow
+   filters on the animating SVG (they repainted on every frame). */
+.hero-name::before {
+  content: '';
+  position: absolute;
+  inset: -12% -6%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 55% 60% at 50% 38%, rgba(123, 47, 254, 0.18), transparent 70%),
+    radial-gradient(ellipse 50% 55% at 50% 68%, rgba(255, 46, 154, 0.12), transparent 70%);
+}
+
+/* Both names render as SVG brush writing: Norican for English,
+   Alexandria + kashida for Arabic. JS toggles which one shows. */
 .hero-name-svg {
   display: block;
   width: min(88vw, 760px);
   height: auto;
   overflow: visible;
-  filter: drop-shadow(0 0 16px rgba(139, 92, 255, 0.28))
-          drop-shadow(0 0 48px rgba(255, 61, 174, 0.14));
-  transition: opacity 0.8s ease, filter 0.9s ease;
 }
 
 /* Letters are gradient fills revealed by JS-driven brush masks —
    no strokes, no transitions; everything is painted behind the brush. */
 
-@media (max-width: 768px) {
-  .hero-name-svg {
-    width: 94vw;
-    filter: drop-shadow(0 0 12px rgba(139, 92, 255, 0.26))
-            drop-shadow(0 0 32px rgba(255, 61, 174, 0.12));
-  }
-}
 
 /* Per-language width caps: both blocks are squarer than a single text
    line, so keep them from towering over the rest of the hero. */
@@ -736,8 +749,9 @@ html[dir="rtl"] .marquee-track { animation-name: marquee-scroll-rtl; }
   transform: translate(-50%, -50%) scale(0.85);
   width: 62px; height: 62px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.12);
-  backdrop-filter: blur(10px);
+  /* no backdrop-filter here: these buttons ride the animated marquee and
+     live blur made every scrolled frame expensive */
+  background: rgba(30, 26, 46, 0.55);
   border: 1px solid rgba(255,255,255,0.25);
   display: flex;
   align-items: center;

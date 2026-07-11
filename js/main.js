@@ -196,6 +196,21 @@ if (lightbox) {
 }
 
 /* ==========================================================================
+   Pause marquee animations while their section is offscreen
+   ========================================================================== */
+
+if ('IntersectionObserver' in window) {
+  const marqueeIO = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      entry.target
+        .querySelectorAll('.marquee-track, .work-marquee-track')
+        .forEach((t) => t.classList.toggle('fx-paused', !entry.isIntersecting));
+    });
+  }, { threshold: 0.02 });
+  document.querySelectorAll('.marquee-section, #work').forEach((s) => marqueeIO.observe(s));
+}
+
+/* ==========================================================================
    Video download / right-click protection
    ========================================================================== */
 

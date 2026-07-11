@@ -39,7 +39,7 @@
   let stars = [];
   function initStars() {
     const isMobile = window.innerWidth <= 768;
-    const count = isMobile ? 300 : 520;
+    const count = isMobile ? 180 : 380;
     stars = [];
     for (let i = 0; i < count; i++) stars.push(makeStar(false));
   }
@@ -75,20 +75,38 @@
     meteors.push({ x, y, vx, vy, len, width, age: 0, estLife, glow: rand(8, 14) });
   }
 
-  function drawNebula() {
-    const t = frame * 0.01;
-    const g1 = ctx.createRadialGradient(W * 0.12, H * 0.95, 0, W * 0.12, H * 0.95, Math.max(W, H) * 0.85);
+  // Nebula layers are pre-rendered once per resize; the pink layer
+  // breathes via globalAlpha instead of rebuilding gradients per frame.
+  let nebulaVioletCv = null, nebulaPinkCv = null;
+
+  function bakeNebula() {
+    if (W < 1 || H < 1) return;
+    nebulaVioletCv = document.createElement('canvas');
+    nebulaVioletCv.width = W; nebulaVioletCv.height = H;
+    const c1 = nebulaVioletCv.getContext('2d');
+    const g1 = c1.createRadialGradient(W * 0.12, H * 0.95, 0, W * 0.12, H * 0.95, Math.max(W, H) * 0.85);
     g1.addColorStop(0, 'rgba(110,43,255,0.07)');
     g1.addColorStop(1, 'rgba(110,43,255,0)');
-    ctx.fillStyle = g1;
-    ctx.fillRect(0, 0, W, H);
+    c1.fillStyle = g1;
+    c1.fillRect(0, 0, W, H);
 
-    const breathe = 0.05 + Math.sin(t * 0.6) * 0.01;
-    const g2 = ctx.createRadialGradient(W * 0.88, H * 0.05, 0, W * 0.88, H * 0.05, Math.max(W, H) * 0.85);
-    g2.addColorStop(0, `rgba(255,46,154,${breathe.toFixed(3)})`);
+    nebulaPinkCv = document.createElement('canvas');
+    nebulaPinkCv.width = W; nebulaPinkCv.height = H;
+    const c2 = nebulaPinkCv.getContext('2d');
+    const g2 = c2.createRadialGradient(W * 0.88, H * 0.05, 0, W * 0.88, H * 0.05, Math.max(W, H) * 0.85);
+    g2.addColorStop(0, 'rgba(255,46,154,0.06)');
     g2.addColorStop(1, 'rgba(255,46,154,0)');
-    ctx.fillStyle = g2;
-    ctx.fillRect(0, 0, W, H);
+    c2.fillStyle = g2;
+    c2.fillRect(0, 0, W, H);
+  }
+
+  function drawNebula() {
+    if (!nebulaVioletCv) return;
+    ctx.drawImage(nebulaVioletCv, 0, 0, W, H);
+    const breathe = 0.83 + Math.sin(frame * 0.006) * 0.17;
+    ctx.globalAlpha = breathe;
+    ctx.drawImage(nebulaPinkCv, 0, 0, W, H);
+    ctx.globalAlpha = 1;
   }
 
   function drawStars() {
@@ -184,13 +202,23 @@
     });
   }
 
+  // Skip all canvas work while the hero is scrolled out of view.
+  let heroVisible = true;
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver((entries) => {
+      heroVisible = entries[0].isIntersecting;
+    }, { threshold: 0.02 }).observe(wrap);
+  }
+
   function tick() {
     requestAnimationFrame(tick);
+    if (!heroVisible) return;
     // ResizeObserver doesn't fire while the tab is hidden; re-check here so
     // the canvas can never stay stuck at a stale (e.g. zero-width) size.
     if (wrap.clientWidth !== W || wrap.clientHeight !== H) {
       resize();
       initStars();
+      bakeNebula();
     }
     frame++;
     ctx.clearRect(0, 0, W, H);
@@ -203,6 +231,7 @@
 
   resize();
   initStars();
+  bakeNebula();
   tick();
 
   let resizeTimer;
@@ -211,6 +240,7 @@
     resizeTimer = setTimeout(() => {
       resize();
       initStars();
+      bakeNebula();
     }, 200);
   }
 

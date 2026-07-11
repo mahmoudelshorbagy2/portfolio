@@ -1,5 +1,8 @@
 (function () {
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // No cursor on touch devices — skip the whole layer: drawing a glow on
+  // every touchmove competed with scrolling on phones.
+  if (window.matchMedia('(pointer: coarse)').matches) return;
 
   const canvas = document.createElement('canvas');
   canvas.id = 'cursor-glow-canvas';
@@ -22,8 +25,7 @@
   resize();
   window.addEventListener('resize', resize);
 
-  const isCoarse = window.matchMedia('(pointer: coarse)').matches;
-  const radius = isCoarse ? 140 : 230;
+  const radius = 230;
 
   const state = {
     tx: w / 2, ty: h / 2,
@@ -47,18 +49,9 @@
 
   document.addEventListener('mouseleave', release);
 
-  window.addEventListener('touchstart', (e) => {
-    const t = e.touches[0];
-    if (t) setTarget(t.clientX, t.clientY);
-  }, { passive: true });
-  window.addEventListener('touchmove', (e) => {
-    const t = e.touches[0];
-    if (t) setTarget(t.clientX, t.clientY);
-  }, { passive: true });
-  window.addEventListener('touchend', release, { passive: true });
-  window.addEventListener('touchcancel', release, { passive: true });
-
   if (reduced) return;
+
+  let wasVisible = false;
 
   function tick() {
     requestAnimationFrame(tick);
@@ -67,8 +60,16 @@
     state.y += (state.ty - state.y) * 0.14;
     state.opacity += (state.targetOpacity - state.opacity) * 0.08;
 
+    // Nothing drawn and nothing to draw: skip the fullscreen clear too.
+    if (state.opacity < 0.008) {
+      if (wasVisible) {
+        ctx.clearRect(0, 0, w, h);
+        wasVisible = false;
+      }
+      return;
+    }
+    wasVisible = true;
     ctx.clearRect(0, 0, w, h);
-    if (state.opacity < 0.008) return;
 
     const grad = ctx.createRadialGradient(state.x, state.y, 0, state.x, state.y, radius);
     grad.addColorStop(0, `rgba(155,107,255,${0.16 * state.opacity})`);
