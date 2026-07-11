@@ -7,6 +7,26 @@ window.addEventListener('scroll', () => {
   navbar.classList.toggle('scrolled', window.scrollY > 30);
 }, { passive: true });
 
+/* In-page links scroll smoothly without ever putting a hash in the URL */
+const smoothBehavior = () =>
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+
+document.querySelectorAll('a[href^="#"]').forEach((a) => {
+  a.addEventListener('click', (e) => {
+    const target = document.querySelector(a.getAttribute('href'));
+    if (!target) return;
+    e.preventDefault();
+    target.scrollIntoView({ behavior: smoothBehavior() });
+  });
+});
+
+// If the page was opened with a hash, honor it once, then clean the URL.
+if (window.location.hash) {
+  const opened = document.querySelector(window.location.hash);
+  history.replaceState(null, '', window.location.pathname + window.location.search);
+  if (opened) requestAnimationFrame(() => opened.scrollIntoView({ behavior: 'auto' }));
+}
+
 const navToggle = document.querySelector('.nav-toggle');
 const mobileMenu = document.querySelector('.mobile-menu');
 
