@@ -669,19 +669,8 @@ html[dir="rtl"] .marquee-track { animation-name: marquee-scroll-rtl; }
   display: flex;
   flex-direction: column;
   gap: 22px;
-  animation-name: marquee-vertical;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
   will-change: transform;
-}
-
-.work-marquee-col:hover .work-marquee-track {
-  animation-play-state: paused;
-}
-
-@keyframes marquee-vertical {
-  from { transform: translateY(0); }
-  to { transform: translateY(-50%); }
+  touch-action: none;
 }
 
 .work-marquee-track .work-card { flex-shrink: 0; }
@@ -831,6 +820,21 @@ html[lang="ar"] .work-card-title { font-family: var(--font-arabic); font-weight:
 html[dir="rtl"] .lightbox-close { right: auto; left: 0; }
 
 .lightbox-close:hover { background: rgba(255,255,255,0.15); transform: rotate(90deg); }
+
+@media (max-width: 860px) {
+  .lightbox-close {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    right: calc(env(safe-area-inset-right, 0px) + 12px);
+    width: 44px;
+    height: 44px;
+    z-index: 1001;
+  }
+  html[dir="rtl"] .lightbox-close {
+    right: auto;
+    left: calc(env(safe-area-inset-left, 0px) + 12px);
+  }
+}
 .lightbox-close svg { width: 18px; height: 18px; }
 
 .lightbox-caption { margin-top: 16px; text-align: center; }

@@ -142,53 +142,83 @@ function getColumnDurations(count) {
   return [18, 24, 21];
 }
 
-function getTranslateY(transformValue) {
-  if (!transformValue || transformValue === 'none') return 0;
-  var m = transformValue.match(/matrix.*\((.+)\)/);
-  if (!m) return 0;
-  var v = m[1].split(', ').map(Number);
-  return v.length === 16 ? v[13] : (v[5] || 0);
+/* ==========================================================================
+   Work marquee JS rAF loop
+   ========================================================================== */
+
+var workTracks = [];
+var workRafId = null;
+var workLastTime = 0;
+
+function initWorkMarquee() {
+  if (workRafId) { cancelAnimationFrame(workRafId); workRafId = null; }
+  workTracks = [];
+
+  document.querySelectorAll('.work-marquee-col').forEach(function (col) {
+    var el = col.querySelector('.work-marquee-track');
+    if (!el) return;
+
+    var duration = parseFloat(el.style.animationDuration) || 18;
+    var trackHeight = el.scrollHeight || 1;
+    var loopDist = trackHeight / 2;
+    var speed = loopDist / duration;
+    var data = {
+      el: el, position: 0, speed: speed, loopDist: loopDist,
+      dragging: false, hoverPaused: false,
+      dragStartY: 0, dragStartPos: 0
+    };
+    el._trackData = data;
+
+    // Touch drag — pause auto-scroll, follow finger, wrap modulo, resume on release
+    el.addEventListener('touchstart', function (e) {
+      if (e.touches.length !== 1) return;
+      data.dragging = true;
+      data.dragStartY = e.touches[0].clientY;
+      data.dragStartPos = data.position;
+    }, { passive: true });
+
+    el.addEventListener('touchmove', function (e) {
+      if (!data.dragging || e.touches.length !== 1) return;
+      e.preventDefault();
+      var deltaY = e.touches[0].clientY - data.dragStartY;
+      var newPos = data.dragStartPos + deltaY;
+      while (newPos > 0) newPos -= data.loopDist;
+      while (newPos < -data.loopDist) newPos += data.loopDist;
+      data.position = newPos;
+      el.style.transform = 'translateY(' + data.position + 'px)';
+    }, { passive: false });
+
+    el.addEventListener('touchend', function () { data.dragging = false; }, { passive: true });
+    el.addEventListener('touchcancel', function () { data.dragging = false; }, { passive: true });
+
+    // Hover pause — matches old CSS .work-marquee-col:hover behaviour
+    col.addEventListener('mouseenter', function () { data.hoverPaused = true; });
+    col.addEventListener('mouseleave', function () { data.hoverPaused = false; });
+
+    workTracks.push(data);
+  });
+
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  workLastTime = performance.now();
+  workRafId = requestAnimationFrame(workLoop);
 }
 
-function setupTouchDrag() {
-  document.querySelectorAll('.work-marquee-track').forEach(function (track) {
-    var drag = null;
+function workLoop(now) {
+  var dt = (now - workLastTime) / 1000;
+  workLastTime = now;
 
-    function onStart(e) {
-      if (e.touches.length !== 1) return;
-      drag = {
-        startY: e.touches[0].clientY,
-        startTranslateY: getTranslateY(getComputedStyle(track).transform),
-        trackHeight: track.scrollHeight,
-        duration: parseFloat(track.style.animationDuration) || parseFloat(getComputedStyle(track).animationDuration)
-      };
-      track.style.animationPlayState = 'paused';
-    }
+  for (var i = 0; i < workTracks.length; i++) {
+    var t = workTracks[i];
+    if (t.dragging || t.el.classList.contains('fx-paused') || t.hoverPaused) continue;
 
-    function onMove(e) {
-      if (!drag || e.touches.length !== 1) return;
-      e.preventDefault();
-      var deltaY = e.touches[0].clientY - drag.startY;
-      var minY = -(drag.trackHeight / 2);
-      var y = Math.max(minY, Math.min(0, drag.startTranslateY + deltaY));
-      track.style.transform = 'translateY(' + y + 'px)';
-    }
+    t.position -= t.speed * dt;
+    if (t.position <= -t.loopDist) t.position += t.loopDist;
 
-    function onEnd() {
-      if (!drag) return;
-      var currentY = track.style.transform ? getTranslateY(track.style.transform) : drag.startTranslateY;
-      var progress = currentY / (-drag.trackHeight / 2);
-      track.style.transform = '';
-      track.style.animationDelay = -(progress * drag.duration) + 's';
-      track.style.animationPlayState = 'running';
-      drag = null;
-    }
+    t.el.style.transform = 'translateY(' + t.position + 'px)';
+  }
 
-    track.addEventListener('touchstart', onStart, { passive: true });
-    track.addEventListener('touchmove', onMove, { passive: false });
-    track.addEventListener('touchend', onEnd, { passive: true });
-    track.addEventListener('touchcancel', onEnd, { passive: true });
-  });
+  workRafId = requestAnimationFrame(workLoop);
 }
 
 function renderWork() {
@@ -219,7 +249,7 @@ function renderWork() {
     card.addEventListener('keypress', function (e) { if (e.key === 'Enter') open(); });
   });
 
-  setupTouchDrag();
+  initWorkMarquee();
 }
 renderWork();
 
